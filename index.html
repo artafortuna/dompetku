@@ -102,6 +102,26 @@
             min-width: 120px; 
             padding-right: 2px;
         }
+
+        /* Hindari sorotan putih dari style bawaan browser pada input profil. */
+        #settings-username {
+            background-color: transparent !important;
+            color: inherit;
+            caret-color: #10b981;
+        }
+        #settings-username:focus {
+            outline: none;
+            background-color: transparent !important;
+            box-shadow: none;
+        }
+        #settings-username:-webkit-autofill,
+        #settings-username:-webkit-autofill:hover,
+        #settings-username:-webkit-autofill:focus {
+            -webkit-text-fill-color: inherit;
+            -webkit-box-shadow: 0 0 0 1000px transparent inset;
+            box-shadow: 0 0 0 1000px transparent inset;
+            transition: background-color 9999s ease-out 0s;
+        }
     </style>
 </head>
 <body class="bg-[#f2f2f7] dark:bg-darkbase text-gray-900 dark:text-white antialiased min-h-screen flex flex-col justify-between transition-colors duration-300">
@@ -109,7 +129,7 @@
     <!-- MAIN APP SHELL -->
     <div id="main-app" class="flex flex-col flex-grow w-full max-w-[500px] mx-auto h-screen relative overflow-hidden">
         
-        <!-- HEADER COMPACT (Logo di Sebelah Judul) -->
+        <!-- HEADER COMPACT -->
         <header class="glass-panel sticky top-0 z-40 px-5 py-3 flex items-center justify-between border-b-0 rounded-b-2xl shadow-sm">
             <div class="flex items-center space-x-2.5">
                 <div class="w-9 h-9 rounded-full bg-white dark:bg-darksurface flex items-center justify-center overflow-hidden shadow-md border border-gray-100 dark:border-gray-800">
@@ -285,7 +305,7 @@
                     <form id="update-account-form" onsubmit="handleUpdateAccount(event)" class="space-y-3">
                         <div class="bg-gray-50 dark:bg-darkbase rounded-xl p-3 border border-gray-200 dark:border-gray-800 focus-within:border-accent-500 transition-colors">
                             <label class="block text-[9px] uppercase tracking-wider font-bold text-gray-400 mb-0.5">Nama Profil</label>
-                            <input type="text" id="settings-username" required class="w-full bg-transparent outline-none text-xs font-semibold" value="Arta Fortuna">
+                            <input type="text" id="settings-username" required class="w-full bg-transparent outline-none text-xs font-semibold">
                         </div>
                         <button type="submit" class="w-full py-3 bg-darkbase dark:bg-white text-white dark:text-darkbase font-bold rounded-xl text-xs transition active:scale-95 shadow-md">Simpan Profil</button>
                     </form>
@@ -307,14 +327,16 @@
                         <i class="fa-solid fa-chevron-right text-gray-300 text-[10px] group-hover:translate-x-1 transition-transform"></i>
                     </button>
 
-                    <label class="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-darkbase rounded-xl border border-gray-200 dark:border-gray-800 hover:border-blue-500 transition-colors group cursor-pointer">
+                    <div class="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-darkbase rounded-xl border border-gray-200 dark:border-gray-800 hover:border-blue-500 transition-colors group">
                         <div class="flex items-center space-x-2.5">
                             <i class="fa-solid fa-cloud-arrow-up text-blue-500 text-xs"></i>
                             <span class="font-semibold text-xs">Impor Data (Pulihkan)</span>
                         </div>
-                        <i class="fa-solid fa-chevron-right text-gray-300 text-[10px] group-hover:translate-x-1 transition-transform"></i>
-                        <input type="file" id="import-file-input" accept=".json" onchange="importJSON(event)" class="hidden">
-                    </label>
+                        <button type="button" onclick="document.getElementById('import-file-input').click()" class="text-blue-500 font-bold text-xs px-2 py-1 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors">
+                            Pilih File
+                        </button>
+                        <input type="file" id="import-file-input" accept=".json,application/json,text/json" onchange="importJSON(event)" class="hidden">
+                    </div>
 
                     <button onclick="confirmClearAllData()" class="w-full flex items-center justify-between p-3 bg-rose-50 dark:bg-rose-500/10 rounded-xl border border-rose-200 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition-colors group">
                         <div class="flex items-center space-x-2.5">
@@ -596,7 +618,7 @@
 
         function initDB() {
             return new Promise((resolve, reject) => {
-                const request = indexedDB.open('DompetkuDB', 7);
+                const request = indexedDB.open('DompetkuDB', 11);
                 request.onerror = (e) => reject(e.target.error);
                 request.onsuccess = (e) => { db = e.target.result; resolve(db); };
                 request.onupgradeneeded = (e) => {
@@ -606,6 +628,9 @@
                     }
                     if (!dbInstance.objectStoreNames.contains('debts')) {
                         dbInstance.createObjectStore('debts', { keyPath: 'id', autoIncrement: true });
+                    }
+                    if (!dbInstance.objectStoreNames.contains('settings')) {
+                        dbInstance.createObjectStore('settings', { keyPath: 'key' });
                     }
                 };
             });
@@ -620,6 +645,26 @@
                     document.documentElement.classList.add('dark');
                 }
                 
+                // Load profile name robustly
+                let savedUsername = localStorage.getItem('dompetku_profile_name');
+                if (!savedUsername && db) {
+                    try {
+                        const tx = db.transaction(['settings'], 'readonly');
+                        const req = tx.objectStore('settings').get('profile_name');
+                        req.onsuccess = (e) => {
+                            if (e.target.result && e.target.result.value) {
+                                savedUsername = e.target.result.value;
+                                localStorage.setItem('dompetku_profile_name', savedUsername);
+                                document.getElementById('display-username').innerText = savedUsername;
+                                document.getElementById('settings-username').value = savedUsername;
+                            }
+                        };
+                    } catch (e) {}
+                }
+                savedUsername = savedUsername || 'Arta Fortuna';
+                document.getElementById('display-username').innerText = savedUsername;
+                document.getElementById('settings-username').value = savedUsername;
+
                 const hour = new Date().getHours();
                 let greeting = 'Selamat Malam,';
                 if (hour >= 4 && hour < 10) greeting = 'Selamat Pagi,';
@@ -1096,6 +1141,18 @@
             </div>`;
         }
 
+        function renderChart() {
+            if (!db) return;
+
+            db.transaction(['transactions'], 'readonly').objectStore('transactions').getAll().onsuccess = (e) => {
+                const filtered = (e.target.result || []).filter(t => t.date && t.date.startsWith(currentFilterMonth));
+                const totalExp = filtered
+                    .filter(t => t.type === 'expense')
+                    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+                renderAnalytics(filtered, totalExp);
+            };
+        }
+
         function renderAnalytics(data, totalExp) {
             const cats = {};
             data.filter(t=>t.type==='expense').forEach(t => cats[t.category] = (cats[t.category]||0) + t.amount);
@@ -1177,13 +1234,24 @@
         function handleUpdateAccount(e) {
             e.preventDefault();
             const u = document.getElementById('settings-username').value.trim();
+            localStorage.setItem('dompetku_profile_name', u);
+            if (db) {
+                try {
+                    const tx = db.transaction(['settings'], 'readwrite');
+                    tx.objectStore('settings').put({ key: 'profile_name', value: u });
+                } catch (err) {}
+            }
             document.getElementById('display-username').innerText = u;
             showToast('Profil berhasil disimpan');
         }
 
         function exportJSON() {
             if(!db) return;
-            const exportData = {};
+            const exportData = {
+                app: "Dompetku",
+                version: "3.0",
+                exportedAt: new Date().toISOString()
+            };
             db.transaction(['transactions'], 'readonly').objectStore('transactions').getAll().onsuccess = e1 => {
                 exportData.transactions = e1.target.result;
                 db.transaction(['debts'], 'readonly').objectStore('debts').getAll().onsuccess = e2 => {
@@ -1197,23 +1265,117 @@
         }
 
         function importJSON(e) {
-            const f = e.target.files[0]; if(!f || !db) return;
-            const r = new FileReader();
-            r.onload = ev => {
+            const file = e.target.files[0]; 
+            if (!file) return;
+            if (!db) {
+                showToast('Database belum siap', 'error');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = ev => {
                 try {
-                    const parsed = JSON.parse(ev.target.result);
-                    if(!parsed.transactions) throw 'err';
-                    const storeTx = db.transaction(['transactions'], 'readwrite').objectStore('transactions');
-                    parsed.transactions.forEach(t => { delete t.id; storeTx.add(t); });
-                    if(parsed.debts && Array.isArray(parsed.debts)) {
-                        const storeDebt = db.transaction(['debts'], 'readwrite').objectStore('debts');
-                        parsed.debts.forEach(d => { delete d.id; storeDebt.add(d); });
+                    const text = ev.target.result;
+                    let parsed;
+                    try {
+                        parsed = JSON.parse(text);
+                    } catch (parseErr) {
+                        throw new Error('File bukan format JSON yang valid.');
                     }
-                    showToast('Data berhasil diimpor');
-                    setTimeout(() => window.location.reload(), 1000);
-                } catch { showToast('Gagal membaca file JSON', 'error'); }
+
+                    // VALIDASI KETAT: Tolak keras file dari aplikasi lain seperti InvestTrack
+                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                        const keys = Object.keys(parsed).join(' ').toLowerCase();
+                        if (keys.includes('invest') || keys.includes('portfolio') || keys.includes('debit') || keys.includes('kredit') || keys.includes('asset')) {
+                            throw new Error('File ini bukan cadangan Dompetku (terdeteksi format aplikasi lain). Impor ditolak!');
+                        }
+                        if (parsed.app && parsed.app !== 'Dompetku') {
+                            throw new Error('File ini bukan cadangan resmi aplikasi Dompetku!');
+                        }
+                    }
+
+                    let txList = [];
+                    let debtList = [];
+
+                    if (Array.isArray(parsed)) {
+                        // Format array langsung dianggap sebagai daftar transaksi.
+                        if (parsed.some(t => !t || typeof t !== 'object' || t.amount === undefined || !t.type)) {
+                            throw new Error('Format data transaksi bukan dari Dompetku. Setiap transaksi wajib memiliki amount dan type.');
+                        }
+                        txList = parsed;
+                    } else if (parsed && typeof parsed === 'object') {
+                        txList = parsed.transactions ?? parsed.data ?? [];
+                        debtList = parsed.debts ?? parsed.hutang ?? [];
+
+                        if (!Array.isArray(txList) || !Array.isArray(debtList)) {
+                            throw new Error('Format JSON tidak valid: transactions/data dan debts/hutang harus berupa array.');
+                        }
+
+                        if (txList.some(t => !t || typeof t !== 'object' || t.amount === undefined || !t.type)) {
+                            throw new Error('Ada transaksi yang tidak memiliki amount atau type yang valid.');
+                        }
+
+                        if (debtList.some(d => !d || typeof d !== 'object' || d.amount === undefined && d.totalAmount === undefined)) {
+                            throw new Error('Ada data hutang/piutang yang tidak memiliki nominal yang valid.');
+                        }
+
+                        if (txList.length === 0 && debtList.length === 0) {
+                            throw new Error('File JSON tidak berisi data transaksi atau hutang/piutang.');
+                        }
+                    } else {
+                        throw new Error('Struktur data JSON tidak dikenali.');
+                    }
+
+                    const stores = [];
+                    if (txList.length > 0 && db.objectStoreNames.contains('transactions')) stores.push('transactions');
+                    if (debtList.length > 0 && db.objectStoreNames.contains('debts')) stores.push('debts');
+
+                    if (stores.length === 0) {
+                        throw new Error('Tabel database tidak tersedia.');
+                    }
+
+                    const tx = db.transaction(stores, 'readwrite');
+
+                    if (stores.includes('transactions')) {
+                        const storeTx = tx.objectStore('transactions');
+                        txList.forEach(t => {
+                            const clean = { ...t };
+                            delete clean.id;
+                            storeTx.add(clean);
+                        });
+                    }
+
+                    if (stores.includes('debts')) {
+                        const storeDebt = tx.objectStore('debts');
+                        debtList.forEach(d => {
+                            const clean = { ...d };
+                            delete clean.id;
+                            storeDebt.add(clean);
+                        });
+                    }
+
+                    tx.oncomplete = () => {
+                        showToast('Data berhasil diimpor!');
+                        setTimeout(() => window.location.reload(), 1000);
+                    };
+
+                    tx.onerror = (txErr) => {
+                        console.error("Gagal transaksi IDB:", txErr.target.error);
+                        showToast('Gagal menulis data ke database', 'error');
+                    };
+
+                } catch (err) {
+                    console.error("Import Error Detail:", err);
+                    showToast(err.message, 'error');
+                } finally {
+                    e.target.value = '';
+                }
             };
-            r.readAsText(f);
+            reader.onerror = () => {
+                showToast('Gagal membaca file perangkat', 'error');
+                e.target.value = '';
+            };
+            reader.readAsText(file);
         }
     </script>
 </body>
